@@ -1,0 +1,75 @@
+
+---
+
+##  🧱  Infra  –  `infra/main.bicep`  (core  resources)
+
+```bicep
+@description('Environment  name  (e.g.  dev,  prod)')
+param  environmentName  string
+
+@description('Location')
+param  location  string  =  'westeurope'
+
+@description('Azure  OpenAI  resource  name')
+param  openAiName  string
+
+@description('Azure  OpenAI  deployment  name  (chat  model)')
+param  openAiDeploymentName  string
+
+resource  rg  'Microsoft.Resources/resourceGroups@2021-04-01'  =  {
+    name:  'rg-ai-agents-${environmentName}'
+    location:  location
+}
+
+resource  storage  'Microsoft.Storage/storageAccounts@2023-01-01'  =  {
+    name:  'staiagents${uniqueString(environmentName)}'
+    location:  location
+    sku:  {
+        name:  'Standard_LRS'
+    }
+    kind:  'StorageV2'
+}
+
+resource  queuePlanner  'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01'  =  {
+    name:  'planner-tasks'
+    parent:  storage::queueServices('default')
+}
+
+resource  queueResearch  'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01'  =  {
+    name:  'research-tasks'
+    parent:  storage::queueServices('default')
+}
+
+resource  queueSummarizer  'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01'  =  {
+    name:  'summarizer-tasks'
+    parent:  storage::queueServices('default')
+}
+
+resource  queueExecutor  'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01'  =  {
+    name:  'executor-tasks'
+    parent:  storage::queueServices('default')
+}
+
+resource  appPlan  'Microsoft.Web/serverfarms@2022-09-01'  =  {
+    name:  'asp-ai-agents-${environmentName}'
+    location:  location
+    sku:  {
+        name:  'Y1'
+        tier:  'Dynamic'
+    }
+}
+
+@description('Create  a  Function  App')
+module  orchestratorFunc  'functionapp.bicep'  =  {
+    name:  'orchestrator-func'
+    scope:  rg
+    params:  {
+        appName:  'func-orchestrator-${environmentName}'
+        storageAccountName:  storage.name
+        appPlanId:  appPlan.id
+        openAiName:  openAiName
+        openAiDeploymentName:  openAiDeploymentName
+    }
+}
+
+//  Similar  modules  for  Api  and  each  Agent...
